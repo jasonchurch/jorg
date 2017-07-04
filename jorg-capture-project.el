@@ -73,7 +73,7 @@
         (set-visited-file-name jorg-project-filepath)
 
         (insert (concat "* PROJECT " project-heading "\n" ))
-        (org-set-property "PROJ_FILE" jorg-project-filepath)
+        (org-set-property "PROJ_FILE" (concat "file:" jorg-project-filepath))
         (org-set-property "CREATED_DATE" created-date )
         (when alt-name (org-set-property "ALT_NAME" alt-name))
         (insert-template-text "   Enter project description.\n")
