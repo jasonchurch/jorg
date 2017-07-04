@@ -25,10 +25,6 @@
 
 ;; Hook up Jorg Capture
 (add-hook 'org-capture-before-finalize-hook 'jorg-capture-finalize-hook)
-(add-to-list 'org-capture-templates
-             '("p" "JOrg Project" entry (file+headline  "~/org/2017/gtd.org" "10K Projects")
-               "* PROJECT %?\n  :PROPERTIES:\n  :CATEGORY: project\n  :CREATED_DATE: %(get-datetime)\n  :ALT_NAME:\n  :END:\n")
-             t)
 
 (defvar jorg-project-base-dir ""
   "The location jorg-project should create project dirs in.")
