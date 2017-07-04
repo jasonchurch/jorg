@@ -64,7 +64,7 @@
                                                              (concat alt-name ".org"))))
          (jorg-project-filepath (concat jorg-project-dirpath (unless (equal "/" (substring jorg-project-dirpath -1)) "/") jorg-project-filename))
          (new-project-buffer nil))
-    (org-set-property "PROJ_FILE" jorg-project-filepath)
+    (org-set-property "PROJ_FILE" (concat "file:" jorg-project-filepath))
     (message "project:%s on %s has alt name:'%s'" project-heading created-date alt-name)
     (make-directory jorg-project-dirpath 't)
     (save-excursion
@@ -73,7 +73,7 @@
         (set-visited-file-name jorg-project-filepath)
 
         (insert (concat "* PROJECT " project-heading "\n" ))
-        (org-set-property "PROJ_FILE" jorg-project-filepath)
+        (org-set-property "PROJ_FILE" (concat "file:" jorg-project-filepath))
         (org-set-property "CREATED_DATE" created-date )
         (when alt-name (org-set-property "ALT_NAME" alt-name))
         (insert-template-text "   Enter project description.\n")
