@@ -67,7 +67,7 @@
       (let ()
         (setq new-project-buffer (set-buffer (generate-new-buffer jorg-project-filepath)))
         (set-visited-file-name jorg-project-filepath)
-
+        (org-agenda-file-to-front)
         (insert (concat "* PROJECT " project-heading "\n" ))
         (org-set-property "PROJ_FILE" (concat "file:" jorg-project-filepath))
         (org-set-property "CREATED_DATE" created-date )
