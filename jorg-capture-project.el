@@ -22,15 +22,44 @@
 (defvar org-capture-plist
   "A global var from org lib, it old the plist for current capture.")
 
-
-;; Hook up Jorg Capture
-(add-hook 'org-capture-before-finalize-hook 'jorg-capture-finalize-hook)
-
-(defvar jorg-project-base-dir ""
+;; JOrg defvars
+(defvar jorg-project-base-dir "~/jorg/projects"
   "The location jorg-project should create project dirs in.")
 
 (defvar jorg-text-template-color "blue"
   "The color of any template text in the JOrg Project org file.")
+
+(defvar jorg-capture-key-main "j"
+  "The key to show the jorg capture templates from org capture templates, `C-c c <key>'.")
+
+(defvar jorg-capture-summary-file "~/jorg/summary.org"
+  "The org file to put the summary of projects.")
+
+(defvar jorg-capture-summary-project-target "Project Summaries"
+  "The target heading under which to file project summaries.")
+
+(defvar jorg-capture-summary-task-target "TASKS"
+  "The target heading under which to file tasks in the summary file.")
+
+(defvar jorg-capture-project-task-target "TASKS"
+  "The target heading under which to file tasks in the project file.")
+
+;; Hook up Jorg Capture
+(add-hook 'org-capture-before-finalize-hook 'jorg-capture-finalize-hook)
+
+;; jorg Captures
+(add-to-list 'org-capture-templates
+             `(,jorg-capture-key-main "JOrg")
+             t)
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "p") "JOrg Project" entry (file+headline  ,jorg-capture-summary-file ,jorg-capture-summary-project-target)
+               "* PROJECT %?\n  :PROPERTIES:\n  :CATEGORY: project\n  :CREATED_DATE: %(get-datetime)\n  :ALT_NAME:\n  :END:\n")
+             t)
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "t") "JOrg Task" entry (function jorg-find-project-or-summary-file)
+               "** NEXT %?\n\n"
+               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file :summary-target ,jorg-capture-summary-task-target)
+             t)
 
 (defun jorg-capture-finalize-hook ()
   "Create a new project file after the project is finalized in main org file."
