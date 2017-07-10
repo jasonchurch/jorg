@@ -91,6 +91,53 @@
     (set-buffer capture-buffer)
     (message "jorg: created new project at: %s" jorg-project-filepath)))
 
+
+(defun jorg-find-project-or-summary-file ()
+  "If current buffer is a project, use it, otherwise find the summary file.
+It relies on 'org-capture' properties:
+- project-target: the heading under which to file the capture
+- summary-file: the summary file to use if current buffer doesn't contain
+  project-target
+- summary-target the summary heading under which to file the capture if no
+  project found."
+  (set-buffer (org-capture-target-buffer (buffer-file-name)))
+  (org-capture-put-target-region-and-position)
+  (let ((hd (org-capture-get :project-target))
+        (summary-file (org-capture-get :summary-file))
+        (summary-target (org-capture-get :summary-target)))
+    (widen)
+    (goto-char (point-min))
+    (if (and (derived-mode-p 'org-mode)
+             (re-search-forward
+              (format org-complex-heading-regexp-format (regexp-quote hd))
+              nil t))
+        (progn (message "position is: %d %d" (point) (point-at-bol))               )
+      (message "Current buffer is either not an org file, %s, or doesn't contain target %s. Attempting to capture to summary file %s and target %s."
+               (buffer-file-name)
+               hd
+               summary-file
+               summary-target)
+      (set-buffer (org-capture-target-buffer summary-file))
+      (org-capture-put-target-region-and-position)
+      (unless (derived-mode-p 'org-mode)
+        (error
+         "Target buffer \"%s\" for file+headline should be in Org mode"
+         (current-buffer)))
+      (widen)
+      (goto-char (point-min))
+      (if (and (derived-mode-p 'org-mode)
+               (re-search-forward
+                (format org-complex-heading-regexp-format (regexp-quote hd))
+                nil t))
+          (progn
+            (message "position is: %d %d" (point) (point-at-bol))
+            )
+        (error
+         "Summary buffer \"%s\" doesn't contain a \"%s\" heading; Capture failed"
+         summary-file
+         summary-target)
+        ))))
+
 (defun get-gmail-entries ()
   "Get entries from gmail account."
   (interactive)
