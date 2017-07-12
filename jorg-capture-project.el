@@ -53,7 +53,7 @@
              t)
 (add-to-list 'org-capture-templates
              `(,(concat jorg-capture-key-main "p") "JOrg Project" entry (file+headline  ,jorg-capture-summary-file ,jorg-capture-summary-project-target)
-               "* PROJECT %?\n  :PROPERTIES:\n  :CATEGORY: project\n  :CREATED_DATE: %(get-datetime)\n  :ALT_NAME:\n  :END:\n")
+               "* PROJECT %?\n  :PROPERTIES:\n  :CATEGORY: project\n  :CREATED_DATE: %(get-datetime)\n  :ALT_NAME:\n  :ID: %(string-trim(org-id-new))\n :END:\n")
              t)
 (add-to-list 'org-capture-templates
              `(,(concat jorg-capture-key-main "t") "JOrg Task" entry (function jorg-find-project-or-summary-file)
@@ -74,6 +74,9 @@
          (capture-buffer (current-buffer))
          (created-date (org-entry-get nil "CREATED_DATE"))
          (alt-name (org-entry-get nil "ALT_NAME"))
+         (id (org-entry-get nil "ID"))
+         (priority (org-entry-get nil "PRIORITY"))
+         (tags (org-entry-get nil "TAGS"))
          (jorg-project-dir (replace-regexp-in-string "[^a-zA-Z0-9.]"
                                                      "_"
                                                      (concat (replace-regexp-in-string "[_/:-]" "" created-date)
@@ -97,20 +100,29 @@
         (setq new-project-buffer (set-buffer (generate-new-buffer jorg-project-filepath)))
         (set-visited-file-name jorg-project-filepath)
         (org-agenda-file-to-front)
+
+        ;; Add project heading, properties and text
         (insert (concat "* PROJECT " project-heading "\n" ))
+
         (org-set-property "PROJ_FILE" (concat "file:" jorg-project-filepath))
         (org-set-property "CREATED_DATE" created-date )
+        (when priority (org-entry-put nil "PRIORITY" priority))
+        (when tags (org-entry-set nil "TAGS" tags))
+        (when id (org-set-property "ID" id))
         (when alt-name (org-set-property "ALT_NAME" alt-name))
         (insert-template-text "   Enter project description.\n")
 
+        ;; Add UPDATES heading and text
         (insert "\n** UPDATES\n")
         (insert-template-text "   Entry any highlevel updates you have for the project here so that \n   its easier to switch contexts by reading updates.\n\n")
         (insert "   - ")
         (insert-template-text "  <2017-07-02 Sun>  (C-c . to get datestamp) some update for this project.\n")
 
+        ;;Add TASKS heading and text
         (insert "\n** TASKS [/]\n")
         (insert-template-text "   Add the next steps as TODO items under TASKS. Ensure a scheduled\n   date or deadline if the task is being planned and you want it to \n   show up in agenda weekly view.\n")
 
+        ;;Add REFERENCE section and text
         (insert "\n** REFERENCE\n")
         (insert-template-text "   Any reference items like URLs, notes, code clips, rough drafts,\n   ideas, etc. should go into headings under this REFERENCE.\n")
 
@@ -206,7 +218,10 @@ It relies on 'org-capture' properties:
   (kill-new buffer-file-name))
 ;; User Utility ends here
 
-
+(defun generate-uuid ()
+  "Generate a UUID.  Implemented by calling Linux uuidgen."
+  (interactive)
+  (shell-command-to-string "/usr/bin/uuid"))
 
 (provide 'jorg-capture-project)
 
