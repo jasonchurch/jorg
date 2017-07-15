@@ -53,13 +53,79 @@
              t)
 (add-to-list 'org-capture-templates
              `(,(concat jorg-capture-key-main "p") "JOrg Project" entry (file+headline  ,jorg-capture-summary-file ,jorg-capture-summary-project-target)
-               "* PROJECT %?\n  :PROPERTIES:\n  :CATEGORY: project\n  :CREATED_DATE: %(get-datetime)\n  :ALT_NAME:\n  :ID: %(string-trim(org-id-new))\n :END:\n")
+               "* %?\n  :PROPERTIES:\n  :CATEGORY: PROJ_SUM\n  :CREATED_DATE: %(get-datetime)\n  :ALT_NAME:\n  :ID: %(string-trim(org-id-new))\n :END:\n"
+               :empty-lines 1
+               )
              t)
 (add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "t") "JOrg Task" entry (function jorg-find-project-or-summary-file)
-               "** NEXT %?\n\n"
+             `(,(concat jorg-capture-key-main "n") "Next (Next Action)" entry (function jorg-find-project-or-summary-file)
+               (function jorg-capture-template-next)
+               :empty-lines 1
                :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file :summary-target ,jorg-capture-summary-task-target)
              t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "s") "Scheduled Next Actions")
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "st") "Tomorrow" entry (function jorg-find-project-or-summary-file)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
+               :summary-target ,jorg-capture-summary-task-target :jorg-capture-scheduled "+1d")
+             t)
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "sw") "Week)" entry (function jorg-find-project-or-summary-file)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
+               :summary-target ,jorg-capture-summary-task-target :jorg-capture-scheduled "+1w")
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "sm") "Month" entry (function jorg-find-project-or-summary-file)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
+               :summary-target ,jorg-capture-summary-task-target :jorg-capture-scheduled "+1m")
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "d") "Deadline Next Actions")
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "dt") "Tomorrow" entry (function jorg-find-project-or-summary-file)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
+               :summary-target ,jorg-capture-summary-task-target :jorg-capture-deadline "+1d")
+             t)
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "dw") "Week)" entry (function jorg-find-project-or-summary-file)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
+               :summary-target ,jorg-capture-summary-task-target :jorg-capture-deadline "+1w")
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "dm") "Month" entry (function jorg-find-project-or-summary-file)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
+               :summary-target ,jorg-capture-summary-task-target :jorg-capture-deadline "+1m")
+             t)
+
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "t") "Todo (unsure, maybe)" entry (function jorg-find-project-or-summary-file)
+               "** TODO %?\n\n"
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file :summary-target ,jorg-capture-summary-task-target)
+             t)
+
 
 (defun jorg-capture-finalize-hook ()
   "Create a new project file after the project is finalized in main org file."
@@ -190,6 +256,24 @@ It relies on 'org-capture' properties:
   (insert (propertize string
                       'font-lock-face '(:foreground "LightSkyBlue" :slant italic))))
 
+;;;;;;;;;;;;;;;;;;;;;;;
+;; Capture Templates ;;
+;;;;;;;;;;;;;;;;;;;;;;;
+(defun jorg-capture-template-next ()
+  "Create capture template for next items.
+It will use optional jorg-capture-scheduled and
+jorg-capture-deadline properties to set a date with org dates or
+date increments, ex +1d."
+  (let ((jorg-schedule (plist-get org-capture-plist :jorg-capture-scheduled))
+        (jorg-deadline (plist-get org-capture-plist :jorg-capture-deadline)))
+    (with-temp-buffer
+      (insert "** NEXT %?\n")
+      (when jorg-schedule (org-schedule nil jorg-schedule))
+      (when jorg-deadline (org-deadline nil jorg-deadline))
+      (buffer-string)
+      )
+    )
+  )
 
 ;;;;;;;;;;;;;;;;;;
 ;; User Utility ;;
