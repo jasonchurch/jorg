@@ -47,13 +47,32 @@
 ;; Hook up Jorg Capture
 (add-hook 'org-capture-before-finalize-hook 'jorg-capture-finalize-hook)
 
-;; jorg Captures
+;; Hook up save hook after-save-hook?
+(add-hook 'after-save-hook 'jorg-sync-projects-to-summaries)
+
+;; JOrg Captures Templates
+(defun jorg-capture-template-next ()
+  "Create capture template for next items.
+It will use optional jorg-capture-scheduled and
+jorg-capture-deadline properties to set a date with org dates or
+date increments, ex +1d."
+  (let ((jorg-schedule (plist-get org-capture-plist :jorg-capture-scheduled))
+        (jorg-deadline (plist-get org-capture-plist :jorg-capture-deadline)))
+    (with-temp-buffer
+      (insert "** NEXT %?\n")
+      (when jorg-schedule (org-schedule nil jorg-schedule))
+      (when jorg-deadline (org-deadline nil jorg-deadline))
+      (buffer-string)
+      )
+    )
+  )
+
 (add-to-list 'org-capture-templates
              `(,jorg-capture-key-main "JOrg")
              t)
 (add-to-list 'org-capture-templates
              `(,(concat jorg-capture-key-main "p") "JOrg Project" entry (file+headline  ,jorg-capture-summary-file ,jorg-capture-summary-project-target)
-               "* %?\n  :PROPERTIES:\n  :CATEGORY: PROJ_SUM\n  :CREATED_DATE: %(get-datetime)\n  :ALT_NAME:\n  :ID: %(string-trim(org-id-new))\n :END:\n"
+               "* %?\n  :PROPERTIES:\n  :CATEGORY: PROJ_SUM\n  :CREATED_DATE: %(get-datetime)\n  :ALT_NAME:\n  :ID: %(string-trim(org-id-new \"summary\"))\n :END:\n"
                :empty-lines 1
                )
              t)
@@ -159,6 +178,9 @@
          (jorg-project-filepath (concat jorg-project-dirpath (unless (equal "/" (substring jorg-project-dirpath -1)) "/") jorg-project-filename))
          (new-project-buffer nil))
     (org-set-property "PROJ_FILE" (concat "file:" jorg-project-filepath))
+    (unless (> (length alt-name) 0) (progn
+                                      (setq alt-name (substring jorg-project-filename 0 10))
+                                      (org-set-property "ALT_NAME" alt-name)))
     (message "project:%s on %s has alt name:'%s'" project-heading created-date alt-name)
     (make-directory jorg-project-dirpath 't)
     (save-excursion
@@ -167,13 +189,17 @@
         (set-visited-file-name jorg-project-filepath)
         (org-agenda-file-to-front)
 
+        ;;remove summary prefix from id
+        (if (equal "summary:" (substring id 0 8))
+            (setq id (substring id 8))
+          )
         ;; Add project heading, properties and text
         (insert (concat "* PROJECT " project-heading "\n" ))
 
         (org-set-property "PROJ_FILE" (concat "file:" jorg-project-filepath))
         (org-set-property "CREATED_DATE" created-date )
         (when priority (org-entry-put nil "PRIORITY" priority))
-        (when tags (org-entry-set nil "TAGS" tags))
+        (when tags (org-set-tags-to tags))
         (when id (org-set-property "ID" id))
         (when alt-name (org-set-property "ALT_NAME" alt-name))
         (insert-template-text "   Enter project description.\n")
@@ -245,6 +271,112 @@ It relies on 'org-capture' properties:
          summary-target)
         ))))
 
+
+(defun jorg-sync-summaries-to-project ()
+  "Sync change to summaries to project files."
+  (let ((absolute-path-summary (expand-file-name jorg-capture-summary-file))
+        (absolute-path-current (expand-file-name (buffer-file-name))))
+    (save-excursion
+      (cond
+       ((equal absolute-path-summary absolute-path-current)
+        ;;on summary, sync each project in jorg-capture-summary-project-target
+        (message "In Summary file, sync to projects")
+        )
+       ))))
+
+(defun jorg-sync-projects-to-summaries ()
+  "Sync project with summary if current buffer is a project.
+Sync summary with project if current buffer is summary."
+  (interactive)
+  (save-window-excursion
+    (save-excursion
+      (when (find-jorg-project)
+        (let ((id (org-entry-get nil "ID"))
+              (heading (org-entry-get nil "ITEM"))
+              (project-properties (org-entry-properties))
+              (is-synced nil)
+              )
+          (when (> (length id) 0)
+            (org-id-goto (concat "summary:" id))
+            (if (equal
+                 (concat "summary:" id) (org-entry-get nil "ID"))
+                (when (jorg-entry-update-properties '("ITEM" "PRIORITY" "TAGS" "PROJ_FILE" "CREATED_DATE" "ALT_NAME") project-properties)
+                  (message "Synced Jorg Project to summary."))
+              (error "Unable to find Org Summary for %s %s" heading id))))))))
+
+
+(defun jorg-enty-update-tags (tags)
+  "Update the TAGS property of the current heading.
+Returns t if entry was updated, otherwise nil.
+
+This was required because tags is a special kind of property
+that isn't updatable `org-entry-put'."
+  (save-excursion
+    (let ((is-updated))
+      (org-back-to-heading)
+      (unless (equal (org-entry-get nil "TAGS") tags)
+        (org-set-tags-to (if tags tags ""))
+        (setq is-updated t))
+      is-updated)))
+
+(defun jorg-enty-update-item (item)
+  "Update the ITEM property of the current heading.
+Returns t if entry was updated, otherwise nil.
+
+This was required because item is a special kind of property
+that isn't updatable `org-entry-put'."
+  (save-excursion
+    (let ((is-updated))
+      (org-back-to-heading)
+      (unless (equal (org-entry-get nil "ITEM") item)
+        (re-search-forward "^\*+ " (point-at-eol))
+        (kill-line)
+        (insert item)
+        (setq is-updated t))
+      is-updated)))
+
+(defun jorg-entry-update-properties (update-keys properties)
+  "Update the properties of the current heading.
+Uses list of property keys from UPDATE-KEYS to identify which pairs from
+PROPERTIES, to update in the current heading.  PROPERTIES is usually obtained
+from another heading using `(org-entry-properties).'
+
+It will only update properties if they are different and it will return t if it
+did, otherwise nil.  If position is not within an org entry, it will through an
+error."
+  (let ((is-updated))
+    (dolist (elt update-keys)
+      (cond
+       ((equal "ITEM" elt)
+        (when  (jorg-enty-update-item (cdr (assoc-string elt properties)))
+          (setq is-updated t)))
+       ((equal "TAGS" elt)
+        (when  (jorg-enty-update-tags (cdr (assoc-string elt properties)))
+          (setq is-updated t))
+        )
+       (t
+        (unless (equal (org-entry-get nil elt) (cdr (assoc-string elt properties)))
+          (org-entry-put nil elt (cdr (assoc-string elt properties)))
+          (setq is-updated t)))))
+    is-updated))
+
+
+(defun find-jorg-project ()
+  "Determine if the `current buffer' is a jorg-project.
+Return t if jorg-project, otherwise nil."
+  (interactive)
+  (let ((is-project nil))
+    (save-excursion
+      (if (derived-mode-p 'org-mode)
+          (progn
+            (ignore-errors
+              (outline-up-heading 1000))
+            (if (equal "PROJECT" (org-entry-get nil "TODO"))
+                't
+              nil))
+        nil
+        ))))
+
 (defun get-gmail-entries ()
   "Get entries from gmail account."
   (interactive)
@@ -255,25 +387,6 @@ It relies on 'org-capture' properties:
   "Insert into the current buffer STRING formated as template text."
   (insert (propertize string
                       'font-lock-face '(:foreground "LightSkyBlue" :slant italic))))
-
-;;;;;;;;;;;;;;;;;;;;;;;
-;; Capture Templates ;;
-;;;;;;;;;;;;;;;;;;;;;;;
-(defun jorg-capture-template-next ()
-  "Create capture template for next items.
-It will use optional jorg-capture-scheduled and
-jorg-capture-deadline properties to set a date with org dates or
-date increments, ex +1d."
-  (let ((jorg-schedule (plist-get org-capture-plist :jorg-capture-scheduled))
-        (jorg-deadline (plist-get org-capture-plist :jorg-capture-deadline)))
-    (with-temp-buffer
-      (insert "** NEXT %?\n")
-      (when jorg-schedule (org-schedule nil jorg-schedule))
-      (when jorg-deadline (org-deadline nil jorg-deadline))
-      (buffer-string)
-      )
-    )
-  )
 
 ;;;;;;;;;;;;;;;;;;
 ;; User Utility ;;
