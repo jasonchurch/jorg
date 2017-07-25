@@ -276,13 +276,25 @@ It relies on 'org-capture' properties:
   "Sync change to summaries to project files."
   (let ((absolute-path-summary (expand-file-name jorg-capture-summary-file))
         (absolute-path-current (expand-file-name (buffer-file-name))))
-    (save-excursion
-      (cond
-       ((equal absolute-path-summary absolute-path-current)
-        ;;on summary, sync each project in jorg-capture-summary-project-target
-        (message "In Summary file, sync to projects")
-        )
-       ))))
+    (save-window-excursion
+      (save-excursion
+        (cond
+         ((equal absolute-path-summary absolute-path-current)
+          ;;on summary, sync each project in jorg-capture-summary-project-target
+          (let ((heading)
+                (id))
+
+            (goto-char (org-find-olp `(jorg-capture-summary-project-target)))
+            ;;Find the summary target (* 10K Projects)
+            ;;Iterate over the childen (these are the summaries)
+            ;;For each child
+            ;;  Save window excursan/buffer
+            ;;  get properties of child
+            ;;  find heading with id of project (strip off summary from child ID)
+            ;;  (jorg-entry-update-properties summary-properties)
+            (message "Synced summary to projects for %s %s" heading id))
+          )
+         )))))
 
 (defun jorg-sync-projects-to-summaries ()
   "Sync project with summary if current buffer is a project.
@@ -291,6 +303,7 @@ Sync summary with project if current buffer is summary."
   (save-window-excursion
     (save-excursion
       (when (find-jorg-project)
+        (jorg-add-remove-project-agenda)
         (let ((id (org-entry-get nil "ID"))
               (heading (org-entry-get nil "ITEM"))
               (project-properties (org-entry-properties))
@@ -304,6 +317,15 @@ Sync summary with project if current buffer is summary."
                   (message "Synced Jorg Project to summary."))
               (error "Unable to find Org Summary for %s %s" heading id))))))))
 
+(defun jorg-add-remove-project-agenda ()
+  "Add current project to agenda if not already one, remove archived ones."
+  (save-excursion
+    (ignore-errors
+      (outline-up-heading 1000))
+    (if (member "ARCHIVE" (org-get-local-tags))
+        (org-remove-file)
+      (unless (org-agenda-file-p)
+        (org-agenda-file-to-front)))))
 
 (defun jorg-enty-update-tags (tags)
   "Update the TAGS property of the current heading.
