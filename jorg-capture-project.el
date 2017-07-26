@@ -304,12 +304,13 @@ Sync summary with project if current buffer is summary."
     (save-excursion
       (when (find-jorg-project)
         (jorg-add-remove-project-agenda)
+        (jorg-add-remove-project-summary)
         (let ((id (org-entry-get nil "ID"))
               (heading (org-entry-get nil "ITEM"))
               (project-properties (org-entry-properties))
               (is-synced nil)
               )
-          (when (> (length id) 0)
+          (unless (or (jorg-archived-p) (= (length id) 0))
             (org-id-goto (concat "summary:" id))
             (if (equal
                  (concat "summary:" id) (org-entry-get nil "ID"))
@@ -326,6 +327,48 @@ Sync summary with project if current buffer is summary."
         (org-remove-file)
       (unless (org-agenda-file-p)
         (org-agenda-file-to-front)))))
+
+(defun jorg-add-remove-project-summary ()
+  "Add current project to agenda if not already there, remove summary for archived ones."
+  (save-excursion
+    (let ((id (org-entry-get nil "ID"))
+          (project-archived-p (jorg-archived-p))
+          (project-properties (org-entry-properties)))
+      (if (jorg-goto-summary-heading id)
+          (when project-archived-p (org-cut-subtree))
+        (unless project-archived-p (jorg-create-summary project-properties))
+        )
+      )
+    )
+  )
+
+(defun jorg-create-summary (project-properties)
+  "Create a summary entry using PROJECT-PROPERTIES."
+  (save-window-excursion
+    (find-file jorg-capture-summary-file)
+    (goto-char (org-find-olp `(,jorg-capture-summary-project-target) t))
+    (org-insert-heading-after-current)
+    (org-demote-subtree)
+    (jorg-entry-update-properties '("ITEM" "PRIORITY" "TAGS" "PROJ_FILE" "CREATED_DATE" "ALT_NAME") project-properties)
+    (org-entry-put nil "ID" (concat "summary:" (cdr (assoc-string "ID" project-properties))))
+    )
+  )
+
+(defun jorg-goto-summary-heading (id)
+  "Go to the summary heading that match this headings ID."
+  (let ((summary-id (concat "summary:" id)))
+    (ignore-errors
+      (org-id-goto summary-id))
+    (if (equal summary-id (org-entry-get nil "ID"))
+        t
+      nil
+      ))
+  )
+
+(defun jorg-archived-p ()
+  "Return non-nil if current heading has archived tag."
+  (member "ARCHIVE" (org-get-tags-at))
+  )
 
 (defun jorg-enty-update-tags (tags)
   "Update the TAGS property of the current heading.
