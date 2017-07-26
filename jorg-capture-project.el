@@ -44,6 +44,12 @@
 (defvar jorg-capture-project-task-target "TASKS"
   "The target heading under which to file tasks in the project file.")
 
+(defvar jorg-user-name nil
+  "The user's name.")
+
+(defvar jorg-user-email nil
+  "The user's email.")
+
 ;; Hook up Jorg Capture
 (add-hook 'org-capture-before-finalize-hook 'jorg-capture-finalize-hook)
 
@@ -189,10 +195,18 @@ date increments, ex +1d."
         (set-visited-file-name jorg-project-filepath)
         (org-agenda-file-to-front)
 
+
         ;;remove summary prefix from id
         (if (equal "summary:" (substring id 0 8))
             (setq id (substring id 8))
           )
+        ;; Add file properties
+        (insert (concat "#+TITLE: " project-heading "\n"))
+        (insert (concat "#+AUTHOR: " jorg-user-name "\n"))
+        (insert (concat "#+EMAIL: " jorg-user-email "\n"))
+        (insert (concat "#+DATE: " created-date "\n"))
+        (insert (concat "#+CATEGORY:" alt-name "\n"))
+        (insert (concat "#+STARTUP: content" "\n"))
         ;; Add project heading, properties and text
         (insert (concat "* PROJECT " project-heading "\n" ))
 
@@ -206,9 +220,10 @@ date increments, ex +1d."
 
         ;; Add UPDATES heading and text
         (insert "\n** UPDATES\n")
+        (org-entry-put nil "VISIBILITY" "showall")
         (insert-template-text "   Entry any highlevel updates you have for the project here so that \n   its easier to switch contexts by reading updates.\n\n")
-        (insert "   - ")
-        (insert-template-text "  <2017-07-02 Sun>  (C-c . to get datestamp) some update for this project.\n")
+        (insert (concat "   - " (org-time-stamp-inactive) " "))
+        (insert-template-text " (use `org-time-stamp-inactive' to get an inactive timestamp) some update for this project.\n")
 
         ;;Add TASKS heading and text
         (insert "\n** TASKS [/]\n")
@@ -216,6 +231,7 @@ date increments, ex +1d."
 
         ;;Add REFERENCE section and text
         (insert "\n** REFERENCE\n")
+        (org-entry-put nil "VISIBILITY" "folded")
         (insert-template-text "   Any reference items like URLs, notes, code clips, rough drafts,\n   ideas, etc. should go into headings under this REFERENCE.\n")
 
         (save-buffer)
