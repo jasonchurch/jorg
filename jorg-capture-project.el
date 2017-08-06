@@ -16,6 +16,7 @@
 
 (require 'org)
 (require 'subr-x)
+
 (defvar org-capture-templates
   "A global var from org lib, it holds list of org capture templates.")
 
@@ -32,15 +33,6 @@
 (defvar jorg-capture-key-main "j"
   "The key to show the jorg capture templates from org capture templates, `C-c c <key>'.")
 
-(defvar jorg-capture-summary-file "~/jorg/summary.org"
-  "The org file to put the summary of projects.")
-
-(defvar jorg-capture-summary-project-target "Project Summaries"
-  "The target heading under which to file project summaries.")
-
-(defvar jorg-capture-summary-task-target "TASKS"
-  "The target heading under which to file tasks in the summary file.")
-
 (defvar jorg-capture-project-task-target "TASKS"
   "The target heading under which to file tasks in the project file.")
 
@@ -51,12 +43,120 @@
   "The user's email.")
 
 ;; Hook up Jorg Capture
-(add-hook 'org-capture-before-finalize-hook 'jorg-capture-finalize-hook)
+(add-hook 'org-capture-before-finalize-hook 'jorg-capture-project-template-finalize-hook)
 
 ;; Hook up save hook after-save-hook?
-(add-hook 'after-save-hook 'jorg-sync-projects-to-summaries)
+(add-hook 'after-save-hook 'jorg-project-on-save)
 
-;; JOrg Captures Templates
+(add-to-list 'org-capture-templates
+             `(,jorg-capture-key-main "JOrg")
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "n") "Next (Next Action)" entry (function jorg-select-project-for-capture-entry)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target )
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "s") "Scheduled Next Actions")
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "st") "Tomorrow" entry (function jorg-select-project-for-capture-entry)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-scheduled "+1d")
+             t)
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "sw") "Week)" entry (function jorg-select-project-for-capture-entry)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-scheduled "+1w")
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "sm") "Month" entry (function jorg-select-project-for-capture-entry)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-scheduled "+1m")
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "d") "Deadline Next Actions")
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "dt") "Tomorrow" entry (function jorg-select-project-for-capture-entry)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-deadline "+1d")
+             t)
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "dw") "Week)" entry (function jorg-select-project-for-capture-entry)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-deadline "+1w")
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "dm") "Month" entry (function jorg-select-project-for-capture-entry)
+               (function jorg-capture-template-next)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-deadline "+1m")
+             t)
+
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "t") "Todo (unsure, maybe)" entry (function jorg-select-project-for-capture-entry)
+               "** TODO %?\n\n"
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target )
+             t)
+
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "p") "JORG Project Template" plain (function jorg-create-temporary-template-buffer)
+               (function jorg-project-template)
+               :empty-lines 1
+               :project-target ,jorg-capture-project-task-target
+               )
+             t)
+
+(defun jorg-capture-project-template-finalize-hook ()
+  "Finalize the JORG project template."
+  (when (equal "JORG Project Template" (plist-get org-capture-plist :description))
+    (message "capture type:%s" (plist-get org-capture-plist ':description ))
+    ;; compute filename
+    ;; setup OrgFile Properties: Category, Author, Title, etc.
+    ;;
+    (set-buffer (org-capture-get :buffer))
+    (message "Finalizing %s " (buffer-name))
+    (unless (jorg-goto-project-heading)
+      (error "Not a JOrg Project Capture"))
+    (let* (
+           (id (org-entry-get nil "ID"))
+           (priority (org-entry-get nil "PRIORITY"))
+           (tags (org-entry-get nil "TAGS"))
+           (category (org-entry-get nil "CATEGORY"))
+           )
+      (unless category (org-entry-put nil "CATEGORY" (substring category 0 10)))
+      (jorg-insert-file-properties (org-entry-properties))
+      (jorg-insert-additional-headings)
+      (jorg-make-buffer-project-file (org-entry-properties))
+      (org-agenda-file-to-front))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; JOrg Captures Templates ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defun jorg-capture-template-next ()
   "Create capture template for next items.
 It will use optional jorg-capture-scheduled and
@@ -73,101 +173,61 @@ date increments, ex +1d."
     )
   )
 
-(add-to-list 'org-capture-templates
-             `(,jorg-capture-key-main "JOrg")
-             t)
-(add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "p") "JOrg Project" entry (file+headline  ,jorg-capture-summary-file ,jorg-capture-summary-project-target)
-               "* %?\n  :PROPERTIES:\n  :CATEGORY: PROJ_SUM\n  :CREATED_DATE: %(get-datetime)\n  :ALT_NAME:\n  :ID: %(string-trim(org-id-new \"summary\"))\n :END:\n"
-               :empty-lines 1
-               )
-             t)
-(add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "n") "Next (Next Action)" entry (function jorg-find-project-or-summary-file)
-               (function jorg-capture-template-next)
-               :empty-lines 1
-               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file :summary-target ,jorg-capture-summary-task-target)
-             t)
 
-(add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "s") "Scheduled Next Actions")
-             t)
+(defun jorg-project-template ()
+  "Create Project Heading template."
+  (message "plist: %s" org-capture-plist)
+  (with-temp-buffer
+    (insert "* PROJECT [#C] %?\n")
+    (insert "  :PROPERTIES:\n")
+    (insert "  :CATEGORY: \n")
+    (insert "  :CREATED_DATE: %(get-datetime)\n")
+    (insert "  :ALT_NAME:\n")
+    (insert "  :ID: %(string-trim(org-id-new)\n")
+    (insert " :END:\n")
+    (buffer-string)
+    )
+  )
 
-(add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "st") "Tomorrow" entry (function jorg-find-project-or-summary-file)
-               (function jorg-capture-template-next)
-               :empty-lines 1
-               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
-               :summary-target ,jorg-capture-summary-task-target :jorg-capture-scheduled "+1d")
-             t)
-(add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "sw") "Week)" entry (function jorg-find-project-or-summary-file)
-               (function jorg-capture-template-next)
-               :empty-lines 1
-               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
-               :summary-target ,jorg-capture-summary-task-target :jorg-capture-scheduled "+1w")
-             t)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; JOrg find/make capture buffer functions ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun jorg-create-temporary-template-buffer ()
+  "Create an empty project buffer that will get its location when capture template completes."
+  (set-window-buffer nil (set-buffer (generate-new-buffer "project template")))
+  (org-mode))
 
-(add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "sm") "Month" entry (function jorg-find-project-or-summary-file)
-               (function jorg-capture-template-next)
-               :empty-lines 1
-               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
-               :summary-target ,jorg-capture-summary-task-target :jorg-capture-scheduled "+1m")
-             t)
+;; TODO: Replace with function that prompts user to choose project file from list.
+;; Defvar jorg-unfiled-project, a project that will contain unfiled tasks. Should have some way to distinguish it.
+(defun jorg-select-project-for-capture-entry ()
+  "Select the project for the capture entry."
+  ;;(message "selected %s" (ido-completing-read "Select JORG Project:" (org-agenda-files)))
+  (let ((capture-file-name (x-popup-menu
+                            (list '(50 50) (selected-frame)) ;; where to popup
+                            (list "Please choose" ;; the menu itself
+                                  (cons "" (mapcar (function (lambda (item) (cons item item)))
+                                                   (org-agenda-files)))))))
+    (set-buffer (find-file capture-file-name))
+    (goto-char (point-min))
+    (if (re-search-forward
+         (format org-complex-heading-regexp-format (regexp-quote jorg-capture-project-task-target))
+         nil t)
+        (goto-char (point-at-bol))
+      (error (concat "No project target: " jorg-capture-project-task-target " in " (buffer-file-name))))
+    (org-mode)
+    )
+  )
 
-(add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "d") "Deadline Next Actions")
-             t)
-
-(add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "dt") "Tomorrow" entry (function jorg-find-project-or-summary-file)
-               (function jorg-capture-template-next)
-               :empty-lines 1
-               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
-               :summary-target ,jorg-capture-summary-task-target :jorg-capture-deadline "+1d")
-             t)
-(add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "dw") "Week)" entry (function jorg-find-project-or-summary-file)
-               (function jorg-capture-template-next)
-               :empty-lines 1
-               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
-               :summary-target ,jorg-capture-summary-task-target :jorg-capture-deadline "+1w")
-             t)
-
-(add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "dm") "Month" entry (function jorg-find-project-or-summary-file)
-               (function jorg-capture-template-next)
-               :empty-lines 1
-               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file
-               :summary-target ,jorg-capture-summary-task-target :jorg-capture-deadline "+1m")
-             t)
-
-
-(add-to-list 'org-capture-templates
-             `(,(concat jorg-capture-key-main "t") "Todo (unsure, maybe)" entry (function jorg-find-project-or-summary-file)
-               "** TODO %?\n\n"
-               :empty-lines 1
-               :project-target ,jorg-capture-project-task-target :summary-file ,jorg-capture-summary-file :summary-target ,jorg-capture-summary-task-target)
-             t)
-
-
-(defun jorg-capture-finalize-hook ()
-  "Create a new project file after the project is finalized in main org file."
-  (message "capture type:%s" (plist-get org-capture-plist ':description ))
-  (when (equal "JOrg Project" (plist-get org-capture-plist ':description ))
-    (jorg-create-project org-capture-plist (org-heading-components))))
-
-(defun jorg-create-project (capture-plist heading-components)
-  "Create a project file within a project location using CAPTURE-PLIST and HEADING-COMPONENTS."
-
-  (let* ((project-heading (nth 4 heading-components))
-         (capture-buffer (current-buffer))
-         (created-date (org-entry-get nil "CREATED_DATE"))
-         (alt-name (org-entry-get nil "ALT_NAME"))
-         (id (org-entry-get nil "ID"))
-         (priority (org-entry-get nil "PRIORITY"))
-         (tags (org-entry-get nil "TAGS"))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Jorg Capture Project Functions ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defun jorg-make-buffer-project-file (properties)
+  "Make the current buffer into a project file using PROPERTIES.
+Using PROPERTIES, project heading properties, determine file and folder
+names, create folder and parents, and make buffer visit generated filename."
+  (let* ((project-heading (cdr (assoc-string "ITEM" properties)))
+         (created-date (cdr (assoc-string "CREATED_DATE" properties)))
+         (alt-name (cdr (assoc-string "ALT_NAME" properties)))
          (jorg-project-dir (replace-regexp-in-string "[^a-zA-Z0-9.]"
                                                      "_"
                                                      (concat (replace-regexp-in-string "[_/:-]" "" created-date)
@@ -182,204 +242,53 @@ date increments, ex +1d."
                                                                (concat project-heading ".org")
                                                              (concat alt-name ".org"))))
          (jorg-project-filepath (concat jorg-project-dirpath (unless (equal "/" (substring jorg-project-dirpath -1)) "/") jorg-project-filename))
-         (new-project-buffer nil))
-    (org-set-property "PROJ_FILE" (concat "file:" jorg-project-filepath))
-    (unless (> (length alt-name) 0) (progn
-                                      (setq alt-name (substring jorg-project-filename 0 10))
-                                      (org-set-property "ALT_NAME" alt-name)))
-    (message "project:%s on %s has alt name:'%s'" project-heading created-date alt-name)
-    (make-directory jorg-project-dirpath 't)
-    (save-excursion
-      (let ()
-        (setq new-project-buffer (set-buffer (generate-new-buffer jorg-project-filepath)))
-        (set-visited-file-name jorg-project-filepath)
-        (org-agenda-file-to-front)
+         )
+    (rename-buffer jorg-project-filename)
+    (set-visited-file-name jorg-project-filepath)
+    (make-directory jorg-project-dirpath 't)))
 
-
-        ;;remove summary prefix from id
-        (if (equal "summary:" (substring id 0 8))
-            (setq id (substring id 8))
-          )
-        ;; Add file properties
-        (insert (concat "#+TITLE: " project-heading "\n"))
-        (insert (concat "#+AUTHOR: " jorg-user-name "\n"))
-        (insert (concat "#+EMAIL: " jorg-user-email "\n"))
-        (insert (concat "#+DATE: " created-date "\n"))
-        (insert (concat "#+CATEGORY:" alt-name "\n"))
-        (insert (concat "#+STARTUP: content" "\n"))
-        ;; Add project heading, properties and text
-        (insert (concat "* PROJECT " project-heading "\n" ))
-
-        (org-set-property "PROJ_FILE" (concat "file:" jorg-project-filepath))
-        (org-set-property "CREATED_DATE" created-date )
-        (when priority (org-entry-put nil "PRIORITY" priority))
-        (when tags (org-set-tags-to tags))
-        (when id (org-set-property "ID" id))
-        (when alt-name (org-set-property "ALT_NAME" alt-name))
-        (insert-template-text "   Enter project description.\n")
-
-        ;; Add UPDATES heading and text
-        (insert "\n** UPDATES\n")
-        (org-entry-put nil "VISIBILITY" "showall")
-        (insert-template-text "   Entry any highlevel updates you have for the project here so that \n   its easier to switch contexts by reading updates.\n\n")
-        (insert (concat "   - " (org-time-stamp-inactive) " "))
-        (insert-template-text " (use `org-time-stamp-inactive' to get an inactive timestamp) some update for this project.\n")
-
-        ;;Add TASKS heading and text
-        (insert "\n** TASKS [/]\n")
-        (insert-template-text "   Add the next steps as TODO items under TASKS. Ensure a scheduled\n   date or deadline if the task is being planned and you want it to \n   show up in agenda weekly view.\n")
-
-        ;;Add REFERENCE section and text
-        (insert "\n** REFERENCE\n")
-        (org-entry-put nil "VISIBILITY" "folded")
-        (insert-template-text "   Any reference items like URLs, notes, code clips, rough drafts,\n   ideas, etc. should go into headings under this REFERENCE.\n")
-
-        (save-buffer)
-        ))
-    (switch-to-buffer-other-window new-project-buffer)
-    (set-buffer capture-buffer)
-    (message "jorg: created new project at: %s" jorg-project-filepath)))
-
-
-(defun jorg-find-project-or-summary-file ()
-  "If current buffer is a project, use it, otherwise find the summary file.
-It relies on 'org-capture' properties:
-- project-target: the heading under which to file the capture
-- summary-file: the summary file to use if current buffer doesn't contain
-  project-target
-- summary-target the summary heading under which to file the capture if no
-  project found."
-  (set-buffer (org-capture-target-buffer (buffer-file-name)))
-  (org-capture-put-target-region-and-position)
-  (let ((hd (org-capture-get :project-target))
-        (summary-file (org-capture-get :summary-file))
-        (summary-target (org-capture-get :summary-target)))
-    (widen)
+(defun jorg-insert-file-properties (properties)
+  "Add org file properties using PROPERTIES.
+PROPERTIES are the properties of the PROJECT heading."
+  (save-excursion
     (goto-char (point-min))
-    (if (and (derived-mode-p 'org-mode)
-             (re-search-forward
-              (format org-complex-heading-regexp-format (regexp-quote hd))
-              nil t))
-        (progn (message "position is: %d %d" (point) (point-at-bol))               )
-      (message "Current buffer is either not an org file, %s, or doesn't contain target %s. Attempting to capture to summary file %s and target %s."
-               (buffer-file-name)
-               hd
-               summary-file
-               summary-target)
-      (set-buffer (org-capture-target-buffer summary-file))
-      (org-capture-put-target-region-and-position)
-      (unless (derived-mode-p 'org-mode)
-        (error
-         "Target buffer \"%s\" for file+headline should be in Org mode"
-         (current-buffer)))
-      (widen)
-      (goto-char (point-min))
-      (if (and (derived-mode-p 'org-mode)
-               (re-search-forward
-                (format org-complex-heading-regexp-format (regexp-quote hd))
-                nil t))
-          (progn
-            (message "position is: %d %d" (point) (point-at-bol))
-            )
-        (error
-         "Summary buffer \"%s\" doesn't contain a \"%s\" heading; Capture failed"
-         summary-file
-         summary-target)
-        ))))
+    (insert (concat "#+TITLE:" (cdr (assoc-string "ITEM" properties)) "\n"))
+    (insert (concat "#+AUTHOR:" jorg-user-name "\n"))
+    (insert (concat "#+EMAIL:" jorg-user-email "\n"))
+    (insert (concat "#+DATE:" (cdr (assoc-string "CREATED_DATE" properties)) "\n"))
+    (insert "#+STARTUP: content\n")))
 
+(defun jorg-insert-additional-headings ()
+  "Insert additional headings like update, tasks, reference at end of current buffer."
+  (save-excursion
+    (goto-char (point-max))
+    (insert "** UPDATES\n")
+    (insert "   :PROPERTIES:\n")
+    (insert "   :VISIBILITY: showall\n")
+    (insert "   :END:\n\n")
+    (insert "** TASKS\n\n")
+    (insert "** REFERENCE\n")
+    (insert "   :PROPERTIES:\n")
+    (insert "   :VISIBILITY: folded\n")
+    (insert "   :END:\n")))
 
-(defun jorg-sync-summaries-to-project ()
-  "Sync change to summaries to project files."
-  (let ((absolute-path-summary (expand-file-name jorg-capture-summary-file))
-        (absolute-path-current (expand-file-name (buffer-file-name))))
-    (save-window-excursion
-      (save-excursion
-        (cond
-         ((equal absolute-path-summary absolute-path-current)
-          ;;on summary, sync each project in jorg-capture-summary-project-target
-          (let ((heading)
-                (id))
-
-            (goto-char (org-find-olp `(jorg-capture-summary-project-target)))
-            ;;Find the summary target (* 10K Projects)
-            ;;Iterate over the childen (these are the summaries)
-            ;;For each child
-            ;;  Save window excursan/buffer
-            ;;  get properties of child
-            ;;  find heading with id of project (strip off summary from child ID)
-            ;;  (jorg-entry-update-properties summary-properties)
-            (message "Synced summary to projects for %s %s" heading id))
-          )
-         )))))
-
-(defun jorg-sync-projects-to-summaries ()
-  "Sync project with summary if current buffer is a project.
-Sync summary with project if current buffer is summary."
+(defun jorg-project-on-save ()
+  "Perform any on-save action."
   (interactive)
   (save-window-excursion
     (save-excursion
-      (when (find-jorg-project)
+      (when (jorg-find-project-heading)
         (jorg-add-remove-project-agenda)
-        (jorg-add-remove-project-summary)
-        (let ((id (org-entry-get nil "ID"))
-              (heading (org-entry-get nil "ITEM"))
-              (project-properties (org-entry-properties))
-              (is-synced nil)
-              )
-          (unless (or (jorg-archived-p) (= (length id) 0))
-            (org-id-goto (concat "summary:" id))
-            (if (equal
-                 (concat "summary:" id) (org-entry-get nil "ID"))
-                (when (jorg-entry-update-properties '("ITEM" "PRIORITY" "TAGS" "PROJ_FILE" "CREATED_DATE" "ALT_NAME") project-properties)
-                  (message "Synced Jorg Project to summary."))
-              (error "Unable to find Org Summary for %s %s" heading id))))))))
+        (message "Saved project %s" (buffer-name))))))
 
 (defun jorg-add-remove-project-agenda ()
   "Add current project to agenda if not already one, remove archived ones."
   (save-excursion
-    (ignore-errors
-      (outline-up-heading 1000))
-    (if (member "ARCHIVE" (org-get-local-tags))
-        (org-remove-file)
-      (unless (org-agenda-file-p)
-        (org-agenda-file-to-front)))))
-
-(defun jorg-add-remove-project-summary ()
-  "Add current project to agenda if not already there, remove summary for archived ones."
-  (save-excursion
-    (let ((id (org-entry-get nil "ID"))
-          (project-archived-p (jorg-archived-p))
-          (project-properties (org-entry-properties)))
-      (if (jorg-goto-summary-heading id)
-          (when project-archived-p (org-cut-subtree))
-        (unless project-archived-p (jorg-create-summary project-properties))
-        )
-      )
-    )
-  )
-
-(defun jorg-create-summary (project-properties)
-  "Create a summary entry using PROJECT-PROPERTIES."
-  (save-window-excursion
-    (find-file jorg-capture-summary-file)
-    (goto-char (org-find-olp `(,jorg-capture-summary-project-target) t))
-    (org-insert-heading-after-current)
-    (org-demote-subtree)
-    (jorg-entry-update-properties '("ITEM" "PRIORITY" "TAGS" "PROJ_FILE" "CREATED_DATE" "ALT_NAME") project-properties)
-    (org-entry-put nil "ID" (concat "summary:" (cdr (assoc-string "ID" project-properties))))
-    )
-  )
-
-(defun jorg-goto-summary-heading (id)
-  "Go to the summary heading that match this headings ID."
-  (let ((summary-id (concat "summary:" id)))
-    (ignore-errors
-      (org-id-goto summary-id))
-    (if (equal summary-id (org-entry-get nil "ID"))
-        t
-      nil
-      ))
-  )
+    (when (jorg-find-project-heading)
+      (if (member "ARCHIVE" (org-get-local-tags))
+          (org-remove-file)
+        (unless (org-agenda-file-p)
+          (org-agenda-file-to-front))))))
 
 (defun jorg-archived-p ()
   "Return non-nil if current heading has archived tag."
@@ -441,34 +350,28 @@ error."
           (setq is-updated t)))))
     is-updated))
 
-
-(defun find-jorg-project ()
-  "Determine if the `current buffer' is a jorg-project.
-Return t if jorg-project, otherwise nil."
-  (interactive)
-  (let ((is-project nil))
-    (save-excursion
-      (if (derived-mode-p 'org-mode)
-          (progn
-            (ignore-errors
-              (outline-up-heading 1000))
-            (if (equal "PROJECT" (org-entry-get nil "TODO"))
-                't
-              nil))
-        nil
-        ))))
-
-(defun get-gmail-entries ()
-  "Get entries from gmail account."
-  (interactive)
-  (print "* hello   :sometag:\nsomecontent")
-  )
-
 (defun insert-template-text (string)
   "Insert into the current buffer STRING formated as template text."
   (insert (propertize string
                       'font-lock-face '(:foreground "LightSkyBlue" :slant italic))))
 
+;;;;;;;;;;;;;;;;;;
+;; JOrg General ;;
+;;;;;;;;;;;;;;;;;;
+(defun jorg-find-project-heading ()
+  "Return the position of project heading or nil."
+  (interactive)
+  (save-excursion
+    (goto-char (point-min))
+    (re-search-forward "^\*+ PROJECT " nil t)
+    )
+  )
+
+(defun jorg-goto-project-heading ()
+  "Move point to project heading."
+  (interactive)
+  (goto-char (jorg-find-project-heading))
+  )
 ;;;;;;;;;;;;;;;;;;
 ;; User Utility ;;
 ;;;;;;;;;;;;;;;;;;
