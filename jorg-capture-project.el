@@ -36,11 +36,18 @@
 (defvar jorg-capture-project-task-target "TASKS"
   "The target heading under which to file tasks in the project file.")
 
+(defvar jorg-capture-project-update-target "UPDATES"
+  "The target heading under which to file tasks in the project file.")
+
 (defvar jorg-user-name nil
   "The user's name.")
 
 (defvar jorg-user-email nil
   "The user's email.")
+
+(defvar jorg-recently-saved-projects-to-front t
+  "Moves recently saved projects to front of the agenda list if non nil.
+This help keeps active projects at the fore front.")
 
 ;; Hook up Jorg Capture
 (add-hook 'org-capture-before-finalize-hook 'jorg-capture-project-template-finalize-hook)
@@ -56,7 +63,7 @@
              `(,(concat jorg-capture-key-main "n") "Next (Next Action)" entry (function jorg-select-project-for-capture-entry)
                (function jorg-capture-template-next)
                :empty-lines 1
-               :project-target ,jorg-capture-project-task-target )
+               :jorg-capture-target ,jorg-capture-project-task-target )
              t)
 
 (add-to-list 'org-capture-templates
@@ -67,14 +74,14 @@
              `(,(concat jorg-capture-key-main "st") "Tomorrow" entry (function jorg-select-project-for-capture-entry)
                (function jorg-capture-template-next)
                :empty-lines 1
-               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-target ,jorg-capture-project-task-target
                :jorg-capture-scheduled "+1d")
              t)
 (add-to-list 'org-capture-templates
              `(,(concat jorg-capture-key-main "sw") "Week)" entry (function jorg-select-project-for-capture-entry)
                (function jorg-capture-template-next)
                :empty-lines 1
-               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-target ,jorg-capture-project-task-target
                :jorg-capture-scheduled "+1w")
              t)
 
@@ -82,7 +89,7 @@
              `(,(concat jorg-capture-key-main "sm") "Month" entry (function jorg-select-project-for-capture-entry)
                (function jorg-capture-template-next)
                :empty-lines 1
-               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-target ,jorg-capture-project-task-target
                :jorg-capture-scheduled "+1m")
              t)
 
@@ -94,14 +101,14 @@
              `(,(concat jorg-capture-key-main "dt") "Tomorrow" entry (function jorg-select-project-for-capture-entry)
                (function jorg-capture-template-next)
                :empty-lines 1
-               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-target ,jorg-capture-project-task-target
                :jorg-capture-deadline "+1d")
              t)
 (add-to-list 'org-capture-templates
              `(,(concat jorg-capture-key-main "dw") "Week)" entry (function jorg-select-project-for-capture-entry)
                (function jorg-capture-template-next)
                :empty-lines 1
-               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-target ,jorg-capture-project-task-target
                :jorg-capture-deadline "+1w")
              t)
 
@@ -109,7 +116,7 @@
              `(,(concat jorg-capture-key-main "dm") "Month" entry (function jorg-select-project-for-capture-entry)
                (function jorg-capture-template-next)
                :empty-lines 1
-               :project-target ,jorg-capture-project-task-target
+               :jorg-capture-target ,jorg-capture-project-task-target
                :jorg-capture-deadline "+1m")
              t)
 
@@ -118,7 +125,14 @@
              `(,(concat jorg-capture-key-main "t") "Todo (unsure, maybe)" entry (function jorg-select-project-for-capture-entry)
                "** TODO %?\n\n"
                :empty-lines 1
-               :project-target ,jorg-capture-project-task-target )
+               :jorg-capture-target ,jorg-capture-project-task-target )
+             t)
+
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "u") "Update" plain (function jorg-select-heading-for-list-capture-entry)
+               (function jorg-capture-template-update)
+               :jorg-capture-target ,jorg-capture-project-update-target
+               )
              t)
 
 
@@ -126,7 +140,6 @@
              `(,(concat jorg-capture-key-main "p") "JORG Project Template" plain (function jorg-create-temporary-template-buffer)
                (function jorg-project-template)
                :empty-lines 1
-               :project-target ,jorg-capture-project-task-target
                )
              t)
 
@@ -173,6 +186,18 @@ date increments, ex +1d."
     )
   )
 
+(defun jorg-capture-template-update ()
+  "Create capture template for next items.
+It will use optional jorg-capture-scheduled and
+jorg-capture-deadline properties to set a date with org dates or
+date increments, ex +1d."
+  (message "indent: %s" (org-capture-get :jorg-indent))
+  (with-temp-buffer
+    (insert (concat "   - " (jorg-inactive-time-stamp) " %?"))
+    (buffer-string)
+    )
+  )
+
 
 (defun jorg-project-template ()
   "Create Project Heading template."
@@ -202,7 +227,8 @@ date increments, ex +1d."
 (defun jorg-select-project-for-capture-entry ()
   "Select the project for the capture entry."
   ;;(message "selected %s" (ido-completing-read "Select JORG Project:" (org-agenda-files)))
-  (let ((capture-file-name (x-popup-menu
+  (let ((target (org-capture-get :jorg-capture-target))
+        (capture-file-name (x-popup-menu
                             (list '(50 50) (selected-frame)) ;; where to popup
                             (list "Please choose" ;; the menu itself
                                   (cons "" (mapcar (function (lambda (item) (cons item item)))
@@ -210,14 +236,43 @@ date increments, ex +1d."
     (set-buffer (find-file capture-file-name))
     (goto-char (point-min))
     (if (re-search-forward
-         (format org-complex-heading-regexp-format (regexp-quote jorg-capture-project-task-target))
+         (format org-complex-heading-regexp-format (regexp-quote target))
          nil t)
-        (goto-char (point-at-bol))
-      (error (concat "No project target: " jorg-capture-project-task-target " in " (buffer-file-name))))
+        (goto-char (point-at-eol))
+      (error (concat "No project target: " target " in " (buffer-file-name))))
     (org-mode)
     )
   )
 
+(defun jorg-select-heading-for-list-capture-entry ()
+  "Select the project for the capture list.
+Locate the target heading and then the first listen within the heading."
+  (let ((target (org-capture-get :jorg-capture-target))
+        (point-at-end-of-heading)
+        (capture-file-name (x-popup-menu
+                            (list '(50 50) (selected-frame)) ;; where to popup
+                            (list "Please choose" ;; the menu itself
+                                  (cons "" (mapcar (function (lambda (item) (cons item item)))
+                                                   (org-agenda-files)))))))
+    (set-buffer (find-file capture-file-name))
+    (goto-char (point-min))
+    (if (re-search-forward
+         (format org-complex-heading-regexp-format (regexp-quote target))
+         nil t)
+        (progn
+          (goto-char (point-at-bol))
+          (save-excursion
+            (org-end-of-subtree)
+            (setq point-at-end-of-heading (point)))
+          (unless (org-list-search-forward (org-item-beginning-re) point-at-end-of-heading t)
+            (error (concat "No list found for target" target " in " (buffer-file-name))))
+          (org-capture-put :jorg-indent (- (point) 2 (point-at-bol)))
+          (goto-char (point-at-bol))
+          )
+      (error (concat "No project target: " target " in " (buffer-file-name))))
+    (org-mode)
+    )
+  )
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Jorg Capture Project Functions ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -266,6 +321,7 @@ PROPERTIES are the properties of the PROJECT heading."
     (insert "   :PROPERTIES:\n")
     (insert "   :VISIBILITY: showall\n")
     (insert "   :END:\n\n")
+    (insert (concat "   - " (jorg-inactive-time-stamp) " initial update\n"))
     (insert "** TASKS\n\n")
     (insert "** REFERENCE\n")
     (insert "   :PROPERTIES:\n")
@@ -287,6 +343,7 @@ PROPERTIES are the properties of the PROJECT heading."
     (when (jorg-find-project-heading)
       (if (member "ARCHIVE" (org-get-local-tags))
           (org-remove-file)
+        (when jorg-recently-saved-projects-to-front (org-remove-file))
         (unless (org-agenda-file-p)
           (org-agenda-file-to-front))))))
 
@@ -379,6 +436,11 @@ error."
   "Get the current date yyyy-mm-dd."
   (interactive)
   (format-time-string "%Y-%m-%d")
+  )
+
+(defun jorg-inactive-time-stamp ()
+  "Get the current date as an org inactive timestamp."
+  (concat "[" (format-time-string "%Y-%m-%d %a") "]")
   )
 
 (defun get-datetime ()
