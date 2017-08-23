@@ -244,16 +244,67 @@ date increments, ex +1d."
     )
   )
 
+(defun jorg-select-project-from-agenda-files ()
+  "Return the user selected jorg project from a popup menu.
+Uses jorg-all-projects-meta, which relies on org-agenda-files force project
+files, to produce the menu items."
+  (let* ((agenda-pairs (mapcar
+                        (lambda (x)
+                          `(,(cdr (assoc-string "name" x)) . ,(cdr (assoc-string "path" x))))
+                        (jorg-all-projects-meta)))
+         (capture-file-name))
+    (push '"List 1" agenda-pairs)
+    (x-popup-menu
+     (list '(50 50) (selected-frame)) ;; where to popup
+     (list "Choose a JOrg Project" ;; the menu itself
+           agenda-pairs
+           ))
+    )
+  )
+;;(jorg-select-project-from-agenda-files)
+
+(defun jorg-project-meta (path)
+  "Return an alist representing the meta data of the project found at PATH."
+  (save-excursion
+    (let* ((project-buffer (get-file-buffer path))
+           (kill-buffer-after)
+           (project-alist ())
+           (project-heading-pos))
+      (unless project-buffer
+        (setq kill-buffer-after t)
+        (setq project-buffer (find-file-noselect path)))
+      (set-buffer project-buffer)
+      (setq project-heading-pos (jorg-find-project-heading))
+      (when project-heading-pos
+        (goto-char project-heading-pos)
+        (push (cons "name" (org-entry-get nil "ITEM")) project-alist)
+        (push (cons "created" (org-entry-get nil "CREATED_DATE")) project-alist)
+        (push (cons "id" (org-entry-get nil "ID")) project-alist)
+        (push (cons "path" path) project-alist)
+        )
+      (when kill-buffer-after (kill-buffer project-buffer))
+      project-alist)))
+;;(cdr (assoc-string "name" (jorg-project-meta "~/org/2017/projects/20170726_214506_Odyssey/Odyssey.org")))
+
+(defun jorg-all-projects-meta ()
+  "Return all jorg projects meta data.
+Returns an alist where the path is the key, and the value is an alist of project
+meta.  Uses org-agenda-files as source of potential project files."
+  (cl-remove-if 'null (mapcar
+                       (lambda (x)
+                         (let ((proj-meta (jorg-project-meta x)))
+                           (if proj-meta
+                               `(,x . ,proj-meta)
+                             nil)))
+                       (org-agenda-files))))
+;;(cdr (assoc-string "~/org/2017/projects/20170819_233419_Note4Roms/Note4Roms.org" (jorg-all-projects-meta)))
+
 (defun jorg-select-heading-for-list-capture-entry ()
   "Select the project for the capture list.
 Locate the target heading and then the first listen within the heading."
   (let ((target (org-capture-get :jorg-capture-target))
         (point-at-end-of-heading)
-        (capture-file-name (x-popup-menu
-                            (list '(50 50) (selected-frame)) ;; where to popup
-                            (list "Please choose" ;; the menu itself
-                                  (cons "" (mapcar (function (lambda (item) (cons item item)))
-                                                   (org-agenda-files)))))))
+        (capture-file-name (jorg-select-project-from-agenda-files)))
     (set-buffer (find-file capture-file-name))
     (goto-char (point-min))
     (if (re-search-forward
