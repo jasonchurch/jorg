@@ -373,6 +373,12 @@ Locate the target heading and then the first listen within the heading."
     (org-mode)
     )
   )
+
+(defun jorg-switch-project ()
+  "Switch buffer to a jorg project."
+  (interactive)
+  (find-file (jorg-select-project))
+  )
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Jorg Capture Project Functions ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
