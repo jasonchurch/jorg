@@ -208,7 +208,7 @@ date increments, ex +1d."
     (insert "  :CATEGORY: \n")
     (insert "  :CREATED_DATE: %(get-datetime)\n")
     (insert "  :ALT_NAME:\n")
-    (insert "  :ID: %(string-trim(org-id-new)\n")
+    (insert "  :ID: %(string-trim(org-id-new))\n")
     (insert " :END:\n")
     (buffer-string)
     )
