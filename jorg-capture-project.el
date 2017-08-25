@@ -23,6 +23,11 @@
 (defvar org-capture-plist
   "A global var from org lib, it old the plist for current capture.")
 
+(defgroup jorg-capture-project nil
+  "A file per project capture add-on for org-mode."
+  :group 'org
+  :prefix "jorg-")
+
 ;; JOrg defvars
 (defvar jorg-project-base-dir "~/jorg/projects"
   "The location jorg-project should create project dirs in.")
@@ -48,6 +53,14 @@
 (defvar jorg-recently-saved-projects-to-front t
   "Moves recently saved projects to front of the agenda list if non nil.
 This help keeps active projects at the fore front.")
+
+(defcustom jorg-select-project-method 'ido
+  "Sets the way users supply input when selecting a project."
+  :type '(choice
+          (const :tag "ido completing read" ido)
+          (const :tag "x-popup menu" x-popup))
+  :group 'jorg-capture-project)
+
 
 ;; Hook up Jorg Capture
 (add-hook 'org-capture-before-finalize-hook 'jorg-capture-project-template-finalize-hook)
@@ -228,7 +241,7 @@ date increments, ex +1d."
   "Select the project for the capture entry."
   ;;(message "selected %s" (ido-completing-read "Select JORG Project:" (org-agenda-files)))
   (let ((target (org-capture-get :jorg-capture-target))
-        (capture-file-name (jorg-select-project-from-agenda-files)))
+        (capture-file-name (jorg-select-project)))
     (set-buffer (find-file capture-file-name))
     (goto-char (point-min))
     (if (re-search-forward
@@ -240,7 +253,14 @@ date increments, ex +1d."
     )
   )
 
-(defun jorg-select-project-from-agenda-files ()
+(defun jorg-select-project ()
+  "Return path to project that user select."
+  (interactive)
+  (cond ((eq jorg-select-project-method 'ido) (jorg-select-project-ido))
+        ((eq jorg-select-project-method 'x-popup) (jorg-select-project-x-popup)))
+  )
+
+(defun jorg-select-project-x-popup ()
   "Return the user selected jorg project from a popup menu.
 Uses jorg-all-projects-meta, which relies on org-agenda-files force project
 files, to produce the menu items."
@@ -266,7 +286,31 @@ files, to produce the menu items."
      (list "Choose a JOrg Project" ;; the menu itself
            agenda-pairs
            ))))
-;;(jorg-select-project-from-agenda-files)
+;;(jorg-select-project-x-popup)
+
+(defun jorg-select-project-ido ()
+  "Select the jorg project using ido."
+  (interactive)
+  (let* ((agenda-pairs (mapcar
+                        (lambda (x)
+                          `(,(cdr (assoc-string "name" x)) . ,(cdr (assoc-string "path" x))))
+                        (jorg-all-projects-meta)))
+         (capture-file-name))
+    (if (jorg-project-p)
+        (progn
+          (setq agenda-pairs (delq (rassoc (expand-file-name (buffer-file-name)) agenda-pairs) agenda-pairs))
+          (let ((proj-meta (jorg-project-meta (buffer-file-name))))
+            (push
+             `(,(cdr (assoc-string "name" proj-meta)) . ,(cdr (assoc-string "path" proj-meta)))
+             agenda-pairs)
+            )))
+    (cdr (assoc-string (ido-completing-read "JOrg Project " (mapcar
+                                                             (lambda (x)
+                                                               (car x))
+                                                             agenda-pairs))
+                       agenda-pairs)))
+  )
+;;(jorg-select-project-ido)
 
 (defun jorg-project-meta (path)
   "Return an alist representing the meta data of the project found at PATH."
@@ -309,7 +353,7 @@ meta.  Uses org-agenda-files as source of potential project files."
 Locate the target heading and then the first listen within the heading."
   (let ((target (org-capture-get :jorg-capture-target))
         (point-at-end-of-heading)
-        (capture-file-name (jorg-select-project-from-agenda-files)))
+        (capture-file-name (jorg-select-project)))
     (set-buffer (find-file capture-file-name))
     (goto-char (point-min))
     (if (re-search-forward
