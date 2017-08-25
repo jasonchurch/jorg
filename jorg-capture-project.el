@@ -228,11 +228,7 @@ date increments, ex +1d."
   "Select the project for the capture entry."
   ;;(message "selected %s" (ido-completing-read "Select JORG Project:" (org-agenda-files)))
   (let ((target (org-capture-get :jorg-capture-target))
-        (capture-file-name (x-popup-menu
-                            (list '(50 50) (selected-frame)) ;; where to popup
-                            (list "Please choose" ;; the menu itself
-                                  (cons "" (mapcar (function (lambda (item) (cons item item)))
-                                                   (org-agenda-files)))))))
+        (capture-file-name (jorg-select-project-from-agenda-files)))
     (set-buffer (find-file capture-file-name))
     (goto-char (point-min))
     (if (re-search-forward
