@@ -248,19 +248,28 @@ date increments, ex +1d."
   "Return the user selected jorg project from a popup menu.
 Uses jorg-all-projects-meta, which relies on org-agenda-files force project
 files, to produce the menu items."
+  (interactive)
   (let* ((agenda-pairs (mapcar
                         (lambda (x)
                           `(,(cdr (assoc-string "name" x)) . ,(cdr (assoc-string "path" x))))
                         (jorg-all-projects-meta)))
          (capture-file-name))
+    (if (jorg-project-p)
+        (progn
+          (setq agenda-pairs (delq (rassoc (expand-file-name (buffer-file-name)) agenda-pairs) agenda-pairs))
+          (push "---" agenda-pairs)
+          (let ((proj-meta (jorg-project-meta (buffer-file-name))))
+            (push
+             `(,(cdr (assoc-string "name" proj-meta)) . ,(cdr (assoc-string "path" proj-meta)))
+             agenda-pairs)
+            ))
+      )
     (push '"List 1" agenda-pairs)
     (x-popup-menu
      (list '(50 50) (selected-frame)) ;; where to popup
      (list "Choose a JOrg Project" ;; the menu itself
            agenda-pairs
-           ))
-    )
-  )
+           ))))
 ;;(jorg-select-project-from-agenda-files)
 
 (defun jorg-project-meta (path)
@@ -280,7 +289,7 @@ files, to produce the menu items."
         (push (cons "name" (org-entry-get nil "ITEM")) project-alist)
         (push (cons "created" (org-entry-get nil "CREATED_DATE")) project-alist)
         (push (cons "id" (org-entry-get nil "ID")) project-alist)
-        (push (cons "path" path) project-alist)
+        (push (cons "path" (expand-file-name path)) project-alist)
         )
       (when kill-buffer-after (kill-buffer project-buffer))
       project-alist)))
@@ -294,7 +303,7 @@ meta.  Uses org-agenda-files as source of potential project files."
                        (lambda (x)
                          (let ((proj-meta (jorg-project-meta x)))
                            (if proj-meta
-                               `(,x . ,proj-meta)
+                               `(,(expand-file-name x) . ,proj-meta)
                              nil)))
                        (org-agenda-files))))
 ;;(cdr (assoc-string "~/org/2017/projects/20170819_233419_Note4Roms/Note4Roms.org" (jorg-all-projects-meta)))
@@ -403,6 +412,12 @@ PROPERTIES are the properties of the PROJECT heading."
   (member "ARCHIVE" (org-get-tags-at))
   )
 
+(defun jorg-project-p ()
+  "Determine whether current buffer is a jorg project or not."
+  (save-excursion
+    (if (jorg-find-project-heading)
+        t
+      nil)))
 (defun jorg-enty-update-tags (tags)
   "Update the TAGS property of the current heading.
 Returns t if entry was updated, otherwise nil.
