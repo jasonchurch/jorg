@@ -62,6 +62,16 @@ This help keeps active projects at the fore front.")
   :group 'jorg-capture-project)
 
 
+
+;;Menu
+(easy-menu-change
+ '("Tools") "JOrg"
+ '(["Switch Project" jorg-switch-project])
+ "Search Files (Grep)...")
+(easy-menu-change '("Tools") "--" nil "Search Files (Grep)...")
+
+
+
 ;; Hook up Jorg Capture
 (add-hook 'org-capture-before-finalize-hook 'jorg-capture-project-template-finalize-hook)
 
