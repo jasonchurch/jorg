@@ -44,6 +44,9 @@
 (defvar jorg-capture-project-update-target "UPDATES"
   "The target heading under which to file tasks in the project file.")
 
+(defvar jorg-capture-project-reference-target "REFERENCE"
+  "The target heading under which to file reference entries.")
+
 (defvar jorg-user-name nil
   "The user's name.")
 
@@ -158,6 +161,12 @@ This help keeps active projects at the fore front.")
                )
              t)
 
+(add-to-list 'org-capture-templates
+             `(,(concat jorg-capture-key-main "r") "Reference" entry (function jorg-select-project-for-capture-entry)
+               (function jorg-capture-template-heading)
+               :jorg-capture-target ,jorg-capture-project-reference-target
+               )
+             t)
 
 (add-to-list 'org-capture-templates
              `(,(concat jorg-capture-key-main "p") "JORG Project Template" plain (function jorg-create-temporary-template-buffer)
@@ -208,6 +217,17 @@ date increments, ex +1d."
       )
     )
   )
+
+(defun jorg-capture-template-heading ()
+  "Create a capture template for adding basic headings.
+Primary motivation is to capture headings for the reference section."
+  (with-temp-buffer
+    (insert "** %?\n")
+    (insert "   :PROPERTIES:\n")
+    (insert (concat "   :CREATED: " (jorg-inactive-time-stamp) "\n"))
+    (insert "   :END:\n")
+    (insert "%i")
+    (buffer-string)))
 
 (defun jorg-capture-template-update ()
   "Create capture template for next items.
