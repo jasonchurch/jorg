@@ -1,39 +1,38 @@
-;;; jorg-capture-project.el --- Jason's Org Capture Customizations
+;;; jorg-capture.el --- Jason's Org Capture functionality
+
+;; Copyright (C) 2017 Jason Church
+
+;; Author: Jason Church <jasonchurch@edeveloper.ca>
+;; Version: 1.0.0
+;; Keywords: outlines jay jorg capture
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
-;; This file contains Jason's Org Capture customizations.  The primary
-;; motivation for these customizations was a desire to be able to
-;; capture projects and their related tasks into separate org files,
-;; while maintaining a master org file with a list of projects.
-
-;; The intention is for a user to create a new project using one
-;; capture to create a new project folder, with a prefix date, and add
-;; an entry into the global org file.  Then the user should use
-;; another capture to add tasks to the project org file they are in.
-
+;; Sets up org capture functionality with jorg items.
 ;;; Code:
 
 (require 'org)
 (require 'subr-x)
+(require 'jorg-common)
 
 (defvar org-capture-templates
   "A global var from org lib, it holds list of org capture templates.")
 
 (defvar org-capture-plist
   "A global var from org lib, it old the plist for current capture.")
-
-(defgroup jorg-capture-project nil
-  "A file per project capture add-on for org-mode."
-  :group 'org
-  :prefix "jorg-")
-
-;; JOrg defvars
-(defvar jorg-project-base-dir "~/jorg/projects"
-  "The location jorg-project should create project dirs in.")
-
-(defvar jorg-text-template-color "blue"
-  "The color of any template text in the JOrg Project org file.")
 
 (defvar jorg-capture-key-main "j"
   "The key to show the jorg capture templates from org capture templates, `C-c c <key>'.")
@@ -47,39 +46,8 @@
 (defvar jorg-capture-project-reference-target "REFERENCE"
   "The target heading under which to file reference entries.")
 
-(defvar jorg-user-name nil
-  "The user's name.")
-
-(defvar jorg-user-email nil
-  "The user's email.")
-
-(defvar jorg-recently-saved-projects-to-front t
-  "Moves recently saved projects to front of the agenda list if non nil.
-This help keeps active projects at the fore front.")
-
-(defcustom jorg-select-project-method 'ido
-  "Sets the way users supply input when selecting a project."
-  :type '(choice
-          (const :tag "ido completing read" ido)
-          (const :tag "x-popup menu" x-popup))
-  :group 'jorg-capture-project)
-
-
-
-;;Menu
-(easy-menu-change
- '("Tools") "JOrg"
- '(["Switch Project" jorg-switch-project])
- "Search Files (Grep)...")
-(easy-menu-change '("Tools") "--" nil "Search Files (Grep)...")
-
-
-
 ;; Hook up Jorg Capture
 (add-hook 'org-capture-before-finalize-hook 'jorg-capture-project-template-finalize-hook)
-
-;; Hook up save hook after-save-hook?
-(add-hook 'after-save-hook 'jorg-project-on-save)
 
 (add-to-list 'org-capture-templates
              `(,jorg-capture-key-main "JOrg")
@@ -103,6 +71,7 @@ This help keeps active projects at the fore front.")
                :jorg-capture-target ,jorg-capture-project-task-target
                :jorg-capture-scheduled "+1d")
              t)
+
 (add-to-list 'org-capture-templates
              `(,(concat jorg-capture-key-main "sw") "Week)" entry (function jorg-select-project-for-capture-entry)
                (function jorg-capture-template-next)
@@ -130,6 +99,7 @@ This help keeps active projects at the fore front.")
                :jorg-capture-target ,jorg-capture-project-task-target
                :jorg-capture-deadline "+1d")
              t)
+
 (add-to-list 'org-capture-templates
              `(,(concat jorg-capture-key-main "dw") "Week)" entry (function jorg-select-project-for-capture-entry)
                (function jorg-capture-template-next)
@@ -145,7 +115,6 @@ This help keeps active projects at the fore front.")
                :jorg-capture-target ,jorg-capture-project-task-target
                :jorg-capture-deadline "+1m")
              t)
-
 
 (add-to-list 'org-capture-templates
              `(,(concat jorg-capture-key-main "t") "Todo (unsure, maybe)" entry (function jorg-select-project-for-capture-entry)
@@ -179,9 +148,6 @@ This help keeps active projects at the fore front.")
   "Finalize the JORG project template."
   (when (equal "JORG Project Template" (plist-get org-capture-plist :description))
     (message "capture type:%s" (plist-get org-capture-plist ':description ))
-    ;; compute filename
-    ;; setup OrgFile Properties: Category, Author, Title, etc.
-    ;;
     (set-buffer (org-capture-get :buffer))
     (message "Finalizing %s " (buffer-name))
     (unless (jorg-goto-project-heading)
@@ -198,7 +164,6 @@ This help keeps active projects at the fore front.")
       (jorg-make-buffer-project-file (org-entry-properties))
       (org-agenda-file-to-front))))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; JOrg Captures Templates ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -213,10 +178,7 @@ date increments, ex +1d."
       (insert "** NEXT %?\n")
       (when jorg-schedule (org-schedule nil jorg-schedule))
       (when jorg-deadline (org-deadline nil jorg-deadline))
-      (buffer-string)
-      )
-    )
-  )
+      (buffer-string))))
 
 (defun jorg-capture-template-heading ()
   "Create a capture template for adding basic headings.
@@ -224,7 +186,7 @@ Primary motivation is to capture headings for the reference section."
   (with-temp-buffer
     (insert "** %?\n")
     (insert "   :PROPERTIES:\n")
-    (insert (concat "   :CREATED: " (jorg-inactive-time-stamp) "\n"))
+    (insert (concat "   :CREATED: " (jorg-common-inactive-time-stamp) "\n"))
     (insert "   :END:\n")
     (insert "%i")
     (buffer-string)))
@@ -236,11 +198,8 @@ jorg-capture-deadline properties to set a date with org dates or
 date increments, ex +1d."
   (message "indent: %s" (org-capture-get :jorg-indent))
   (with-temp-buffer
-    (insert (concat "   - " (jorg-inactive-time-stamp) " %?"))
-    (buffer-string)
-    )
-  )
-
+    (insert (concat "   - " (jorg-common-inactive-time-stamp) " %?"))
+    (buffer-string)))
 
 (defun jorg-project-template ()
   "Create Project Heading template."
@@ -249,13 +208,11 @@ date increments, ex +1d."
     (insert "* PROJECT [#C] %?\n")
     (insert "  :PROPERTIES:\n")
     (insert "  :CATEGORY: \n")
-    (insert "  :CREATED_DATE: %(get-datetime)\n")
+    (insert "  :CREATED_DATE: %(jorg-common-get-datetime)\n")
     (insert "  :ALT_NAME:\n")
     (insert "  :ID: %(string-trim(org-id-new))\n")
     (insert " :END:\n")
-    (buffer-string)
-    )
-  )
+    (buffer-string)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; JOrg find/make capture buffer functions ;;
@@ -280,103 +237,7 @@ date increments, ex +1d."
         (goto-char (point-at-eol))
       (error (concat "No project target: " target " in " (buffer-file-name))))
     (org-mode)
-    )
-  )
-
-(defun jorg-select-project ()
-  "Return path to project that user select."
-  (interactive)
-  (cond ((eq jorg-select-project-method 'ido) (jorg-select-project-ido))
-        ((eq jorg-select-project-method 'x-popup) (jorg-select-project-x-popup)))
-  )
-
-(defun jorg-select-project-x-popup ()
-  "Return the user selected jorg project from a popup menu.
-Uses jorg-all-projects-meta, which relies on org-agenda-files force project
-files, to produce the menu items."
-  (interactive)
-  (let* ((agenda-pairs (mapcar
-                        (lambda (x)
-                          `(,(cdr (assoc-string "name" x)) . ,(cdr (assoc-string "path" x))))
-                        (jorg-all-projects-meta)))
-         (capture-file-name))
-    (if (jorg-project-p)
-        (progn
-          (setq agenda-pairs (delq (rassoc (expand-file-name (buffer-file-name)) agenda-pairs) agenda-pairs))
-          (push "---" agenda-pairs)
-          (let ((proj-meta (jorg-project-meta (buffer-file-name))))
-            (push
-             `(,(cdr (assoc-string "name" proj-meta)) . ,(cdr (assoc-string "path" proj-meta)))
-             agenda-pairs)
-            ))
-      )
-    (push '"List 1" agenda-pairs)
-    (x-popup-menu
-     (list '(50 50) (selected-frame)) ;; where to popup
-     (list "Choose a JOrg Project" ;; the menu itself
-           agenda-pairs
-           ))))
-;;(jorg-select-project-x-popup)
-
-(defun jorg-select-project-ido ()
-  "Select the jorg project using ido."
-  (interactive)
-  (let* ((agenda-pairs (mapcar
-                        (lambda (x)
-                          `(,(cdr (assoc-string "name" x)) . ,(cdr (assoc-string "path" x))))
-                        (jorg-all-projects-meta)))
-         (capture-file-name))
-    (if (jorg-project-p)
-        (progn
-          (setq agenda-pairs (delq (rassoc (expand-file-name (buffer-file-name)) agenda-pairs) agenda-pairs))
-          (let ((proj-meta (jorg-project-meta (buffer-file-name))))
-            (push
-             `(,(cdr (assoc-string "name" proj-meta)) . ,(cdr (assoc-string "path" proj-meta)))
-             agenda-pairs)
-            )))
-    (cdr (assoc-string (ido-completing-read "JOrg Project " (mapcar
-                                                             (lambda (x)
-                                                               (car x))
-                                                             agenda-pairs))
-                       agenda-pairs)))
-  )
-;;(jorg-select-project-ido)
-
-(defun jorg-project-meta (path)
-  "Return an alist representing the meta data of the project found at PATH."
-  (save-excursion
-    (let* ((project-buffer (get-file-buffer path))
-           (kill-buffer-after)
-           (project-alist ())
-           (project-heading-pos))
-      (unless project-buffer
-        (setq kill-buffer-after t)
-        (setq project-buffer (find-file-noselect path)))
-      (set-buffer project-buffer)
-      (setq project-heading-pos (jorg-find-project-heading))
-      (when project-heading-pos
-        (goto-char project-heading-pos)
-        (push (cons "name" (org-entry-get nil "ITEM")) project-alist)
-        (push (cons "created" (org-entry-get nil "CREATED_DATE")) project-alist)
-        (push (cons "id" (org-entry-get nil "ID")) project-alist)
-        (push (cons "path" (expand-file-name path)) project-alist)
-        )
-      (when kill-buffer-after (kill-buffer project-buffer))
-      project-alist)))
-;;(cdr (assoc-string "name" (jorg-project-meta "~/org/2017/projects/20170726_214506_Odyssey/Odyssey.org")))
-
-(defun jorg-all-projects-meta ()
-  "Return all jorg projects meta data.
-Returns an alist where the path is the key, and the value is an alist of project
-meta.  Uses org-agenda-files as source of potential project files."
-  (cl-remove-if 'null (mapcar
-                       (lambda (x)
-                         (let ((proj-meta (jorg-project-meta x)))
-                           (if proj-meta
-                               `(,(expand-file-name x) . ,proj-meta)
-                             nil)))
-                       (org-agenda-files))))
-;;(cdr (assoc-string "~/org/2017/projects/20170819_233419_Note4Roms/Note4Roms.org" (jorg-all-projects-meta)))
+    ))
 
 (defun jorg-select-heading-for-list-capture-entry ()
   "Select the project for the capture list.
@@ -400,15 +261,8 @@ Locate the target heading and then the first listen within the heading."
           (goto-char (point-at-bol))
           )
       (error (concat "No project target: " target " in " (buffer-file-name))))
-    (org-mode)
-    )
-  )
+    (org-mode)))
 
-(defun jorg-switch-project ()
-  "Switch buffer to a jorg project."
-  (interactive)
-  (find-file (jorg-select-project))
-  )
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Jorg Capture Project Functions ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -457,157 +311,19 @@ PROPERTIES are the properties of the PROJECT heading."
     (insert "   :PROPERTIES:\n")
     (insert "   :VISIBILITY: showall\n")
     (insert "   :END:\n\n")
-    (insert (concat "   - " (jorg-inactive-time-stamp) " initial update\n"))
+    (insert (concat "   - " (jorg-common-inactive-time-stamp) " initial update\n"))
     (insert "** TASKS\n\n")
     (insert "** REFERENCE\n")
     (insert "   :PROPERTIES:\n")
     (insert "   :VISIBILITY: folded\n")
     (insert "   :END:\n")))
 
-(defun jorg-project-on-save ()
-  "Perform any on-save action."
-  (interactive)
-  (save-window-excursion
-    (save-excursion
-      (when (jorg-find-project-heading)
-        (jorg-add-remove-project-agenda)
-        (message "Saved project %s" (buffer-name))))))
-
-(defun jorg-add-remove-project-agenda ()
-  "Add current project to agenda if not already one, remove archived ones."
-  (save-excursion
-    (when (jorg-find-project-heading)
-      (if (member "ARCHIVE" (org-get-local-tags))
-          (org-remove-file)
-        (when jorg-recently-saved-projects-to-front (org-remove-file))
-        (unless (org-agenda-file-p)
-          (org-agenda-file-to-front))))))
-
-(defun jorg-archived-p ()
-  "Return non-nil if current heading has archived tag."
-  (member "ARCHIVE" (org-get-tags-at))
-  )
-
-(defun jorg-project-p ()
-  "Determine whether current buffer is a jorg project or not."
-  (save-excursion
-    (if (jorg-find-project-heading)
-        t
-      nil)))
-(defun jorg-enty-update-tags (tags)
-  "Update the TAGS property of the current heading.
-Returns t if entry was updated, otherwise nil.
-
-This was required because tags is a special kind of property
-that isn't updatable `org-entry-put'."
-  (save-excursion
-    (let ((is-updated))
-      (org-back-to-heading)
-      (unless (equal (org-entry-get nil "TAGS") tags)
-        (org-set-tags-to (if tags tags ""))
-        (setq is-updated t))
-      is-updated)))
-
-(defun jorg-enty-update-item (item)
-  "Update the ITEM property of the current heading.
-Returns t if entry was updated, otherwise nil.
-
-This was required because item is a special kind of property
-that isn't updatable `org-entry-put'."
-  (save-excursion
-    (let ((is-updated))
-      (org-back-to-heading)
-      (unless (equal (org-entry-get nil "ITEM") item)
-        (re-search-forward "^\*+ " (point-at-eol))
-        (kill-line)
-        (insert item)
-        (setq is-updated t))
-      is-updated)))
-
-(defun jorg-entry-update-properties (update-keys properties)
-  "Update the properties of the current heading.
-Uses list of property keys from UPDATE-KEYS to identify which pairs from
-PROPERTIES, to update in the current heading.  PROPERTIES is usually obtained
-from another heading using `(org-entry-properties).'
-
-It will only update properties if they are different and it will return t if it
-did, otherwise nil.  If position is not within an org entry, it will through an
-error."
-  (let ((is-updated))
-    (dolist (elt update-keys)
-      (cond
-       ((equal "ITEM" elt)
-        (when  (jorg-enty-update-item (cdr (assoc-string elt properties)))
-          (setq is-updated t)))
-       ((equal "TAGS" elt)
-        (when  (jorg-enty-update-tags (cdr (assoc-string elt properties)))
-          (setq is-updated t))
-        )
-       (t
-        (unless (equal (org-entry-get nil elt) (cdr (assoc-string elt properties)))
-          (org-entry-put nil elt (cdr (assoc-string elt properties)))
-          (setq is-updated t)))))
-    is-updated))
-
+;;TODO doesn't appear to be used, do we need any more, can we use with current template?
 (defun insert-template-text (string)
   "Insert into the current buffer STRING formated as template text."
   (insert (propertize string
                       'font-lock-face '(:foreground "LightSkyBlue" :slant italic))))
 
-;;;;;;;;;;;;;;;;;;
-;; JOrg General ;;
-;;;;;;;;;;;;;;;;;;
-(defun jorg-find-project-heading ()
-  "Return the position of project heading or nil."
-  (interactive)
-  (save-excursion
-    (goto-char (point-min))
-    (re-search-forward "^\*+ PROJECT " nil t)
-    )
-  )
+(provide 'jorg-capture)
 
-(defun jorg-goto-project-heading ()
-  "Move point to project heading."
-  (interactive)
-  (goto-char (jorg-find-project-heading))
-  )
-;;;;;;;;;;;;;;;;;;
-;; User Utility ;;
-;;;;;;;;;;;;;;;;;;
-(defun get-date ()
-  "Get the current date yyyy-mm-dd."
-  (interactive)
-  (format-time-string "%Y-%m-%d")
-  )
-
-(defun jorg-inactive-time-stamp ()
-  "Get the current date as an org inactive timestamp."
-  (concat "[" (format-time-string "%Y-%m-%d %a") "]")
-  )
-
-(defun get-datetime ()
-  "Get the current date and time yyyy-mm-dd HH:mm:ss."
-  (interactive)
-  (format-time-string "%Y-%m-%d %H:%M:%S")
-  )
-
-(defun insert-date ()
-  "Insert current date yyyy-mm-dd."
-  (interactive)
-  (insert (format-time-string "%Y-%m-%d")))
-
-(defun copy-file-path ()
-  "Copies the file path of current buffer to kill ring."
-  (interactive)
-  (message "%s" buffer-file-name)
-  (kill-new buffer-file-name))
-;; User Utility ends here
-
-(defun generate-uuid ()
-  "Generate a UUID.  Implemented by calling Linux uuidgen."
-  (interactive)
-  (shell-command-to-string "/usr/bin/uuid"))
-
-(provide 'jorg-capture-project)
-
-;;; jorg-capture-project.el ends here
+;;; jorg-capture.el ends here
