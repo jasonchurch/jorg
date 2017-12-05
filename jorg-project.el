@@ -103,6 +103,9 @@ This help keeps active projects at the fore front.")
           (const :tag "x-popup menu" x-popup))
   :group 'jorg-capture-project)
 
+(defvar jorg-projects-meta-cache 'nil
+  "Hold map of project meta.")
+
 ;;Menu
 (easy-menu-change
  '("Tools") "JOrg"
@@ -145,6 +148,11 @@ files, to produce the menu items."
      (list "Choose a JOrg Project" ;; the menu itself
            agenda-pairs))))
 ;;(jorg-select-project-x-popup)
+
+(defun jorg-projects-files ()
+  "Return list of project files.
+Currently jorg considers all files that relies on the files in org-agenda-files."
+  (org-agenda-files))
 
 (defun jorg-select-project-ido ()
   "Select the jorg project using ido."
@@ -196,14 +204,31 @@ files, to produce the menu items."
   "Return all jorg projects meta data.
 Returns an alist where the path is the key, and the value is an alist of project
 meta.  Uses org-agenda-files as source of potential project files."
+  (if jorg-projects-meta-cache
+      jorg-projects-meta-cache
+    (setq jorg-projects-meta-cache (jorg-load-projects-meta))))
+;;(cdr (assoc-string "~/org/2017/projects/20170819_233419_Note4Roms/Note4Roms.org" (jorg-all-projects-meta)))
+
+(defun jorg-load-projects-meta ()
+  "Load jorg project meta from project files."
   (cl-remove-if 'null (mapcar
                        (lambda (x)
                          (let ((proj-meta (jorg-project-meta x)))
                            (if proj-meta
-                               `(,(expand-file-name x) . ,proj-meta)
+                               (cons (expand-file-name x) proj-meta)
                              nil)))
-                       (org-agenda-files))))
-;;(cdr (assoc-string "~/org/2017/projects/20170819_233419_Note4Roms/Note4Roms.org" (jorg-all-projects-meta)))
+                       (jorg-projects-files))))
+
+(defun jorg-projects-meta-cache-add-project (filename &optional replace)
+  "Add new meta to cache using FILENAME, push to front of alist, unless optional REPLACE is not nil."
+  (if replace
+      (setf (cdr (assoc-string filename jorg-projects-meta-cache)) (jorg-project-meta filename))
+    (push (jorg-project-meta filename) jorg-projects-meta-cache)))
+
+(defun jorg-projects-meta-cache-remove-project (filename)
+  "Remove project from meta cache using FILENAME."
+  (setq jorg-projects-meta-cache-remove-project
+        (assq-delete-all (car (assoc-string filename jorg-projects-meta-cache)) jorg-projects-meta-cache)))
 
 (defun jorg-switch-project ()
   "Switch buffer to a jorg project."
@@ -224,10 +249,20 @@ meta.  Uses org-agenda-files as source of potential project files."
   (save-excursion
     (when (jorg-find-project-heading)
       (if (member "ARCHIVE" (org-get-local-tags))
-          (org-remove-file)
-        (when jorg-recently-saved-projects-to-front (org-remove-file))
-        (unless (org-agenda-file-p)
-          (org-agenda-file-to-front))))))
+          (progn
+            (org-remove-file)
+            (jorg-projects-meta-cache-remove-project (buffer-file-name)))
+        (if jorg-recently-saved-projects-to-front
+            (progn
+              (org-remove-file) ;; remove this file from org
+              (org-agenda-file-to-front) ;;add it back to the front
+              (jorg-projects-meta-cache-remove-project (buffer-file-name)) ;; remove from meta cache
+              (jorg-projects-meta-cache-add-project (buffer-file-name)) ;;add back to front
+              )
+          (unless (org-agenda-file-p) (org-agenda-file-to-front)) ;;else only add if not in agenda
+          (jorg-projects-meta-cache-add-project (buffer-file-name) t)) ;;add meta to cache, or replace if exists
+        ))))
+
 
 (defun jorg-archived-p ()
   "Return non-nil if current heading has archived tag."
